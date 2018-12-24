@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:shiro="http://www.pollix.at/thymeleaf/shiro">
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+    <link rel="stylesheet" th:href="@{/css/bootstrap.min.css}" />
+    <link rel="stylesheet" th:href="@{/css/jquery.dataTables.min.css}" />
+    <link rel="stylesheet" th:href="@{/css/matrix-style.css}" />
+    <link rel="stylesheet" th:href="@{/css/matrix-media.css}" />
+    <link th:href="@{/font-awesome/css/font-awesome.css}" rel="stylesheet" />
+    <style>
+			.header {
+				height: 145px; 
+				margin: 0px 5px 5px 5px; 
+				border: 1px solid #e1e1e1;
+			    background-color: #f7f7f7;
+			    z-index: 999;
+			    top: 50px;
+		        position: absolute;
+		        width: 300px;
+		        filter:alpha(Opacity=20);
+		        -moz-opacity:0.1;
+		        opacity: 0.9;
+		        left:5px;
+			}
+			
+			.searchArea {
+				float: left;
+				width: 260px; 
+				display: inline;
+			}
+			
+			.searchCond {
+				width: 100%;
+				font: normal 14px/20px arial;
+				color: #3B92E7;
+				text-align: left;
+				margin: 15px 0 3px;
+			}
+			
+			.searchInput {
+				float: left;
+				position: absolute;
+			}
+			
+			.searchBtn {
+				margin: 0 0 0 7px;
+				display: inline;
+				margin-left: 270px;
+			}
+			.btn{
+				padding: 8px 12px;
+			}
+			
+			.searchCond span.carName {
+				padding: 0 0.5em 0 0.1em;
+			} 
+			#vehicleNo {
+				height: 35px;
+				width: 200px;
+				font-size: 16px;
+				border-radius:5px; 
+				margin-left:10px;
+				border: none; 
+			}
+			
+			searchInput,.searchBtn {
+				float: left;
+				position: absolute;
+				border-radius:10px;
+			}
+			.datetimeDiv{
+				margin: 10px 0px 10px 10px;
+			}
+			.datetimeRender{
+				height: 35px;
+				width: 200px;
+				font-size: 16px;
+				border-radius:5px; 
+				border: none; 
+			}
+			
+		</style>
+    <title>谷歌地图</title>
+</head>
+<body>
+
+<!--Header-part-->
+<div id="header">
+    <h1><a href="dashboard.html">Matrix Admin</a></h1>
+</div>
+<!--close-Header-part-->
+
+<!--top-Header-menu-->
+<div th:include="common/top :: top"></div>
+<div th:include="common/menu :: menu"></div>
+
+<div id="content">
+<div id="content-header">
+        <div id="breadcrumb"> <a href="#" title="Go to Home" class="tip-bottom"><i class="icon-home"></i> Home</a> <a href="#" class="current">Tables</a> </div>
+    </div>
+     <div class="header">
+		<div class="searchArea">
+			<div class="datetimeDiv">
+				<input name="startPostime" type="text" class="Wdate datetimeRender" id="startPostime" maxlength="64" placeholder="请输入定位开始时间" 
+					onClick="WdatePicker({dateFmt:'yyyy-MM-dd HH:mm:ss'})" autocomplete="off" value="">
+			</div>			
+			<div class="datetimeDiv">
+				<input name="endPostime" type="text" class="Wdate datetimeRender" id="endPostime" maxlength="64" placeholder="请输入定位结束时间" 
+					onClick="WdatePicker({dateFmt:'yyyy-MM-dd HH:mm:ss'})" autocomplete="off" value="">
+			</div>
+			<div class="searchInput">
+				<input name="vehicleNo" type="text" id="vehicleNo" maxlength="20" placeholder="请输入车牌号" autocomplete="off" style="color:black;" value="">
+			</div>
+			<div class="searchBtn" style="margin-left: 210px;">
+				<button type="button" class="btn btn-success" style="width:80px;height:35px;" id="trajectoryRun">查询</button>
+			</div>
+		</div>
+	</div>
+	<div class="table-responsive" style="width:100%;margin: 0 auto;">
+	 	<div class="col-md-12" style="padding-left:5px;padding-right:5px;width:100%">
+			<div id="map" style="width:100%;"></div> 
+	 	</div>
+	</div>
+
+
+</div>
+<!--/添加弹框-->
+
+
+
+<!--Footer-part-->
+<div class="row-fluid">
+    <div id="footer" class="span12"> 2017 &copy; yqj <a href="http://themedesigner.in/">Themedesigner.in</a> </div>
+</div>
+<!--end-Footer-part-->
+<script type="text/javascript" th:src="@{/js/jquery-1.11.2.min.js}"></script>
+<script th:src="@{/js/bootstrap.min.js}" th:sr></script>
+<script th:src="@{/js/jquery.dataTables.min.js}"></script>
+<script th:src="@{/js/layer.js}"></script>
+<script src="http://maps.google.cn/maps/api/js?v=3.20&region=cn&language=zh-CN&key=AIzaSyBbL90Wy3ZgpJ3d-b0cD2Xx21YqLt0u4D0"></script>
+<script type="text/javascript" src="/js/GPS.js"></script>
+<script type="text/javascript" src="/js/base64.js"></script>
+<script type="text/javascript" src="/js/datepiker/WdatePicker.js"></script>
+<script type="text/javascript" src="/js/common.js"></script>
+<script type="text/javascript">
+//全局变量定义
+$('#map').height($(window).height());
+var VesselInformations=[];
+var map;//地图
+var trackPath = null; //轨迹路径
+var startMarker = null;//起始标记
+var endMarker = null;//结束标记
+$(function(){
+	//解析页面地址中的参数
+	var vehicleNo = Utils.getUrlParam('vehicleNo');
+	var startPostime = Utils.getUrlParam('startPostime');
+	var endPostime = Utils.getUrlParam('endPostime');
+	//初始化地图
+	var mapProp = {
+        center:new google.maps.LatLng(39.9,116.3),
+        zoom:4,
+        mapTypeId:google.maps.MapTypeId.TERRAIN,
+	};
+	map=new google.maps.Map(document.getElementById("map"), mapProp);
+	if(!Utils.isEmptyString(vehicleNo)){
+		asyncTrajectoryService(vehicleNo,startPostime,endPostime);	
+	}
+	
+	//绑定轨迹查询事件
+	$("#trajectoryRun").click(function(){
+		$("table tbody").empty();			
+		var vehicleNo = $("#vehicleNo").val(); 
+        var startPostime = $("#startPostime").val(); 
+        var endPostime = $("#endPostime").val(); 
+        if (Utils.isEmptyString(vehicleNo)) {
+			alert("车牌号不能为空！");
+			return;
+		}
+		if (Utils.isEmptyString(startPostime)) {
+			alert("请选择定位开始时间！");
+			return;
+		}
+		if (Utils.isEmptyString(endPostime)) {
+			alert("请选择定位结束时间！");
+			return;
+		}  
+		asyncTrajectoryService(vehicleNo,startPostime,endPostime);			
+	});
+	
+});
+
+//异步请求车辆轨迹服务
+function asyncTrajectoryService(vehicleNo,startPostime,endPostime){
+	var body = {};
+	body.vehicleNo = vehicleNo;
+	body.startPostime = startPostime;
+	body.endPostime = endPostime;
+	Utils.ajaxService('VehiclepositionTrajectory',body,function(data){
+		if(data.code == 1 && data.data){
+			showTrack(data.data);
+		} else { 
+			clearTrack();
+			var msg = data.msg;
+			alert(msg);
+		}
+	},function(){
+		clearTrack();
+		alert("查询不到车辆轨迹信息");
+	});
+}
+
+//绘制车辆轨迹
+function showTrack(data) {
+    var trackPoints = [
+        
+    ];
+	
+	//坐标装载
+    var bounds = new google.maps.LatLngBounds();
+	$.each(data,function (n,row) {
+		var lng = row.lng;//经度
+		var lat = row.lat;//纬度
+		lat = parseFloat(lat);
+		lng = parseFloat(lng);
+		//坐标纠偏
+		var gps = GPS.gcj_encrypt(lat,lng);
+        lat = gps.lat;
+        lng = gps.lon;
+		var latlng = new google.maps.LatLng(lat, lng);
+		trackPoints.push(latlng);				
+        bounds.extend(latlng);
+
+	});
+    
+    //轨迹路径绘制
+	if(trackPath != null){
+		trackPath.setMap(null);
+		trackPath = new google.maps.Polyline({
+	        path: trackPoints,
+	        strokeColor: "#FF0000", // 线条颜色
+	        strokeOpacity: 0.8,     // 线条透明度
+	        strokeWeight: 4         // 线条粗细
+	    });
+	    trackPath.setMap(map);
+	}else{
+		trackPath = new google.maps.Polyline({
+	        path: trackPoints,
+	        strokeColor: "#FF0000", // 线条颜色
+	        strokeOpacity: 0.8,     // 线条透明度
+	        strokeWeight: 4         // 线条粗细
+	    });
+	    trackPath.setMap(map);
+	}
+	
+	//如果坐标点多余1个，则使用  google map 的fitBounds，自动计算zoom值
+    if (data.length > 1) {   
+    	//起始结束位置
+	    var startPoint = data[0];
+	    var endPoint = data[data.length - 1];
+		var gps = GPS.gcj_encrypt(parseFloat(startPoint.lat),parseFloat(startPoint.lng));
+		startPoint.lat = gps.lat;
+		startPoint.lng = gps.lon;
+		gps = GPS.gcj_encrypt(parseFloat(endPoint.lat),parseFloat(endPoint.lng));
+		endPoint.lat = gps.lat;
+		endPoint.lng = gps.lon;
+	    var startLatlng = new google.maps.LatLng(parseFloat(startPoint.lat),parseFloat(startPoint.lng));
+	    var endLatlng = new google.maps.LatLng(parseFloat(endPoint.lat),parseFloat(endPoint.lng));
+	    
+	    //起始标记绘制
+	    if(startMarker != null){
+	    	startMarker.setMap(null);
+	    	startMarker = new google.maps.Marker({
+	            position: startLatlng,
+	            icon:'./images/start.png',
+	            map: map
+	        }); 
+	    }else{
+	    	startMarker = new google.maps.Marker({
+	            position: startLatlng,
+	            icon:'./images/start.png',
+	            map: map
+	        }); 
+	    }
+	    
+	    //结束标记绘制
+        if(endMarker != null){
+        	endMarker.setMap(null);
+        	endMarker = new google.maps.Marker({
+	            position: endLatlng,
+	            icon:'./images/end.png',
+	            map: map
+	        });
+        }else{
+        	endMarker = new google.maps.Marker({
+	            position: endLatlng,
+	            icon:'./images/end.png',
+	            map: map
+	        });
+        }
+         
+    	map.fitBounds(bounds);
+    }
+}
+
+//清除轨迹
+function clearTrack(){
+	if(trackPath!=null){ trackPath.setMap(null); }
+	if(startMarker!=null){ startMarker.setMap(null); }
+	if(endMarker!=null){ endMarker.setMap(null); }
+}
+
+//获取url参数
+function getUrlParam() {	
+	var param;
+	  	var url = location.href;
+	  	if(url.indexOf("#") > 0){
+	  		param= url.substring(url.indexOf("#") + 1, url.length);
+	  	}	        	
+	  	return param;
+};
+</script>
+
+</body>
+</html>
